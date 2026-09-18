@@ -11,8 +11,8 @@
 #include <math.h>
 
 /* Verified entry points, see GROUND_QUERY.md */
-#define RAY_HOOK_SITE   SH_IMG(0x169B7630)
-#define CAST_RAY_FN     SH_IMG(0xFBE88D0)
+#define RAY_HOOK_SITE SH_IMG(0x163f18d0)
+#define CAST_RAY_FN SH_IMG(0xfbb3580)
 
 /* The engine's own 0x4000 mask rejects every hit in this
  * world, so query permissively and filter by distance.
@@ -165,6 +165,7 @@ static volatile uint64_t g_qFn = 0;
 static uint64_t g_qArg[6];
 static volatile uint64_t g_qRet = 0;
 static volatile int g_qPending = 0;
+static volatile LONG g_qClaim = 0;
 static volatile int g_qDone = 0;
 static volatile int g_qFloat = 0;
 static volatile int g_qSix = 0;
@@ -414,7 +415,12 @@ RayHookCallback(uint64_t rcx, uint64_t rdx, uint64_t r8) {
     ShNpcPump();
     ShSceneTick();
 
-    if (g_qPending && g_qFn) {
+    /* The 2026-09-15 update casts rays from several worker
+     * threads, so this callback runs concurrently: the single-slot
+     * queue must be claimed, or two threads execute the same job
+     * and race the done/ret handshake. */
+    if (g_qPending && g_qFn &&
+        InterlockedCompareExchange(&g_qClaim, 1, 0) == 0) {
         uint64_t f = g_qFn;
         uint64_t a0 = g_qArg[0], a1 = g_qArg[1];
         uint64_t a2 = g_qArg[2], a3 = g_qArg[3];
@@ -427,6 +433,7 @@ RayHookCallback(uint64_t rcx, uint64_t rdx, uint64_t r8) {
         else if (isSix) g_qRet = ((ShQFn6_t)f)(a0, a1, a2, a3, a4, a5);
         else            g_qRet = ((ShQFn_t)f)(a0, a1, a2, a3);
         g_qDone = 1;
+        InterlockedExchange(&g_qClaim, 0);
     }
     if (!g_req || g_busy || !g_B) return;
 

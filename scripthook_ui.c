@@ -12,30 +12,30 @@
 #include "log.h"
 
 /* Engine entry points as RVAs. See FINDINGS, UI SYSTEM. */
-#define F_ALLOC_CTX     SH_IMG(0xE064390)
-#define F_ALLOC         SH_IMG(0x60ACBF0)
-#define G_POOL          SH_IMG(0x4D78D00)
-#define F_CONT_CTOR     SH_IMG(0x32F5E70)
-#define F_ATTACH        SH_IMG(0x32F4D00)
-#define F_DIRTY         SH_IMG(0x17408BA0)
-#define F_LINST_CTOR    SH_IMG(0x336F0B0)
-#define F_LABEL_CREATE  SH_IMG(0x336F7F0)
-#define F_LABEL_APPLY   SH_IMG(0x336F7B0)
-#define F_LABEL_TEXT    SH_IMG(0x3336E30)
-#define F_LABEL_SIZE    SH_IMG(0x3336EE0)
-#define F_LABEL_UPDATE  SH_IMG(0x17490300)
-#define F_LABEL_REGIST  SH_IMG(0x33359F0)
-#define F_IINST_CTOR    SH_IMG(0x336E7F0)
-#define F_IMAGE_CREATE  SH_IMG(0x336EC80)
-#define F_IMAGE_APPLY   SH_IMG(0x336EC30)
-#define F_WIDGET_COLOUR SH_IMG(0x32F3DD0)
+#define F_ALLOC_CTX SH_IMG(0xe410100)
+#define F_ALLOC SH_IMG(0x674f1a0)
+#define G_POOL SH_IMG(0x4d78d80)
+#define F_CONT_CTOR SH_IMG(0x32f5310)
+#define F_ATTACH SH_IMG(0x32f4230)
+#define F_DIRTY SH_IMG(0x16bafd60)
+#define F_LINST_CTOR SH_IMG(0x336e440)
+#define F_LABEL_CREATE SH_IMG(0x336eb60)
+#define F_LABEL_APPLY SH_IMG(0x336eb20)
+#define F_LABEL_TEXT SH_IMG(0x3336260)
+#define F_LABEL_SIZE SH_IMG(0x3336310)
+#define F_LABEL_UPDATE SH_IMG(0x16c30910)
+#define F_LABEL_REGIST SH_IMG(0x3334e20)
+#define F_IINST_CTOR SH_IMG(0x336db60)
+#define F_IMAGE_CREATE SH_IMG(0x336e010)
+#define F_IMAGE_APPLY SH_IMG(0x336dfc0)
+#define F_WIDGET_COLOUR SH_IMG(0x32f3310)
 
-#define VT_LABEL        SH_IMG(0x3CF89D0)
-#define VT_CONTAINER    SH_IMG(0x3CF09C0)
-#define VT_CONT_PRIV    SH_IMG(0x3CF09F8)
-#define VT_IMAGE        SH_IMG(0x3CF1660)
-#define VT_LABEL_INST   SH_IMG(0x3D052C8)
-#define VT_IMAGE_INST   SH_IMG(0x3D04EA0)
+#define VT_LABEL SH_IMG(0x3cf8930)
+#define VT_CONTAINER SH_IMG(0x3cf0920)
+#define VT_CONT_PRIV SH_IMG(0x3cf0958)
+#define VT_IMAGE SH_IMG(0x3cf15c0)
+#define VT_LABEL_INST SH_IMG(0x3d05228)
+#define VT_IMAGE_INST SH_IMG(0x3d04e00)
 
 /* Widget private layout. */
 #define P_LOCAL      0x90
@@ -87,18 +87,18 @@ enum { OP_PANEL = 1, OP_LABEL, OP_IMAGE, OP_TEXT, OP_POS, OP_SIZE,
        OP_REPARENT };
 
 /* label size flags at +0x24c/+0x24d: 1 fixed, 0 by text */
-#define F_LABEL_FIXW  SH_IMG(0x33366A0)
-#define F_LABEL_FIXH  SH_IMG(0x3337140)
+#define F_LABEL_FIXW SH_IMG(0x3335ad0)
+#define F_LABEL_FIXH SH_IMG(0x3336570)
 
 /* Textures of our own: the engine's texture object, pixels
  * pushed via its direct map, drawn by name "ptr_<hex>". */
-#define F_TEX_CTOR    SH_IMG(0xDC4D920)
-#define F_TEX_CREATE  SH_IMG(0xDCC7280)
-#define F_TEX_MAP     SH_IMG(0xDC79B00)
-#define F_TEX_PUSH    SH_IMG(0x14FEEB0)
-#define F_IMG_UV0     SH_IMG(0x32FDDD0)
-#define F_IMG_UV1     SH_IMG(0x32FDF70)
-#define G_DEVICE      SH_IMG(0x4D5B058)
+#define F_TEX_CTOR SH_IMG(0xdf5c480)
+#define F_TEX_CREATE SH_IMG(0xe04f670)
+#define F_TEX_MAP SH_IMG(0xdf7feb0)
+#define F_TEX_PUSH SH_IMG(0x14ffe70)
+#define F_IMG_UV0 SH_IMG(0x32fd280)
+#define F_IMG_UV1 SH_IMG(0x32fd420)
+#define G_DEVICE SH_IMG(0x4d5b0d8)
 #define MAX_TEX       64
 
 typedef struct {
@@ -421,6 +421,12 @@ static int DefaultScene(void) {
 }
 
 /* assets, purge of dead widgets, then the scene */
+/* Torn-read sentinel (see the array publication notes below). */
+static uint64_t g_arraySentinel;
+static uint64_t g_arraySentinelRoot;
+static uint64_t MakeSentinel(uint64_t parentPriv);
+static void InstallBaseArrays(uint64_t priv);
+
 static int Resolve(int sid) {
     uint64_t scene, root, rootPriv;
 
@@ -445,6 +451,11 @@ static int Resolve(int sid) {
         ShSetError(SH_ERR_NO_CANDIDATE);
         return 0;
     }
+    InstallBaseArrays(rootPriv);
+    if (g_arraySentinelRoot != rootPriv) {
+        g_arraySentinelRoot = rootPriv;
+        g_arraySentinel = MakeSentinel(rootPriv);
+    }
     return 1;
 }
 
@@ -457,19 +468,35 @@ static uint64_t EAlloc(size_t size, size_t align) {
     return mem;
 }
 
-/* Shrinking moves the counts before the pointer: the engine
- * walks these arrays every frame. Moot on the game thread,
- * kept because it documents the rule. */
+/* The 2026-09-15 update walks child arrays on worker threads
+ * while the game thread edits them. The engine reads the array
+ * pointer and its count as two separate loads, so a walk can
+ * pair a retired array with the newer, larger count and read one
+ * slot past its end. Safety here is lock-free by design: every
+ * array keeps one slot of slack past its count, pointed at the
+ * sentinel widget, so any torn pairing stays in-bounds on a live
+ * widget; grow publishes the array before the counts (the new array
+ * safely serves the old count as a prefix); shrink publishes the
+ * counts first (the old array safely serves the smaller count);
+ * fresh containers get a valid empty base array so a null array is
+ * never paired with a nonzero count. Retired arrays are leaked,
+ * bounded by rebuild count, because freeing them raced a walk.
+ * (Per-object engine locks are not usable here: only the scene
+ * priv carries an initialized lock at +0x370.) */
+static void SlackSet(uint64_t arr, uint64_t idx) {
+    if (arr && g_arraySentinel) WQ(arr + 8 * idx, g_arraySentinel);
+}
+
 static int ArrayAdd(uint64_t cont, uint64_t off, uint64_t h) {
     uint64_t n = RQ(cont + off + 8), old = RQ(cont + off + 16);
-    uint64_t arr = EAlloc(8 * (n + 1), 8);
+    uint64_t arr = EAlloc(8 * (n + 2), 8);
     if (!arr) return 0;
     if (n) memcpy((void *)(uintptr_t)arr, (void *)(uintptr_t)old, 8 * n);
     WQ(arr + 8 * n, h);
+    SlackSet(arr, n + 1);
     WQ(cont + off + 16, arr);
     WQ(cont + off, n + 1);
     WQ(cont + off + 8, n + 1);
-    ShSceneFree(old);
     return 1;
 }
 
@@ -478,34 +505,76 @@ static int ArrayInsert(uint64_t cont, uint64_t off, uint64_t h, int at) {
     uint64_t n = RQ(cont + off + 8), old = RQ(cont + off + 16);
     uint64_t arr, i, k = 0;
     if (at < 0 || (uint64_t)at > n) at = (int)n;
-    arr = EAlloc(8 * (n + 1), 8);
+    arr = EAlloc(8 * (n + 2), 8);
     if (!arr) return 0;
     for (i = 0; i < n; i++) {
         if (i == (uint64_t)at) WQ(arr + 8 * k++, h);
         WQ(arr + 8 * k++, RQ(old + 8 * i));
     }
     if ((uint64_t)at == n) WQ(arr + 8 * k++, h);
+    SlackSet(arr, n + 1);
     WQ(cont + off + 16, arr);
     WQ(cont + off, n + 1);
     WQ(cont + off + 8, n + 1);
-    ShSceneFree(old);
     return 1;
 }
 
 static void ArrayRemove(uint64_t cont, uint64_t off, uint64_t h) {
     uint64_t n = RQ(cont + off + 8), old = RQ(cont + off + 16);
-    uint64_t arr, i, k = 0;
+    uint64_t arr, i, k = 0, j;
     if (!n) return;
-    arr = EAlloc(8 * n, 8);
+    arr = EAlloc(8 * (n + 1), 8);
     if (!arr) return;
     for (i = 0; i < n; i++) {
         uint64_t v = RQ(old + 8 * i);
         if (v != h) WQ(arr + 8 * k++, v);
     }
+    for (j = k; j <= n; j++) SlackSet(arr, j);
     WQ(cont + off, k);
     WQ(cont + off + 8, k);
     WQ(cont + off + 16, arr);
-    ShSceneFree(old);
+}
+
+/* Present a valid empty array on a fresh container (and slack-fill
+ * an engine base array at count zero) so a concurrent walk never
+ * pairs a null or short array with a nonzero count. */
+static void InstallBaseArrays(uint64_t priv) {
+    static const uint64_t offs[2] = {C_KIDS, C_ORDER};
+    uint64_t i;
+    if (!priv) return;
+    for (i = 0; i < 2; i++) {
+        uint64_t off = offs[i];
+        uint64_t cnt = RQ(priv + off + 8), arr = RQ(priv + off + 16);
+        if (!cnt && arr) {
+            SlackSet(arr, 0);
+        } else if (!cnt && !arr) {
+            uint64_t base = EAlloc(8, 8);
+            if (!base) continue;
+            SlackSet(base, 0);
+            WQ(priv + off + 16, base);
+            WQ(priv + off, 0);
+            WQ(priv + off + 8, 0);
+        }
+    }
+}
+
+/* One label, never added to any child array, never destroyed: only
+ * ever visited through a slack slot, so a torn walk still reads a
+ * live widget. Created with a real parent because the engine's
+ * label-create dereferences the parent immediately. */
+static uint64_t MakeSentinel(uint64_t parentPriv) {
+    uint64_t inst = EAlloc(0x120, 8), h = 0, p;
+    int32_t err = -1;
+    if (!inst || !parentPriv) return 0;
+    ((Fn1)F_LINST_CTOR)(inst);
+    WQ(inst + LI_FONTREF, g_ctx.fontAsset);
+    WQ(inst + LI_FONTREF + 8, 0);
+    ((Fn4)F_LABEL_CREATE)(inst, (uint64_t)(uintptr_t)&err,
+                          (uint64_t)(uintptr_t)&h, parentPriv);
+    if (err < 0 || !h) return 0;
+    p = RQ(h + 0x20);
+    ((Fn3)F_LABEL_APPLY)(inst, (uint64_t)(uintptr_t)&err, p);
+    return h;
 }
 
 /* Run the handle's destructor without its delete, then free
@@ -709,10 +778,13 @@ static void DestroySubtree(Widget *w, uint64_t pp) {
         memset(&plate, 0, sizeof(plate));
         plate.handle = w->plateHandle; plate.priv = w->plate;
         Detach(&plate, w->priv);
-        DestroyOne(w->plateHandle, w->plateInst);
     }
+    /* Live-scene widgets are retired, not destroyed: a worker walk
+     * may already hold their pointers, and with no usable engine
+     * lock the only safe destructor is none. Leaked once per
+     * rebuild, like the retired arrays; the scene no longer
+     * references them once Detach has run. */
     Detach(w, pp);
-    DestroyOne(w->handle, w->inst);
 }
 
 static uint64_t JobBody(int op, Widget *w);
