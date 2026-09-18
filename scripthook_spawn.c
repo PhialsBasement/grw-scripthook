@@ -19,7 +19,7 @@
  * below, with the vehicle id in the high dword.
  */
 #define VEH_KIND_HASH    0x8F2CBBBAu
-#define SPEC_VTABLE      SH_IMG(0x394A1E0)
+#define SPEC_VTABLE SH_IMG(0x394a060)
 #define SPEC_HANDLE_OFF  0x28
 #define COMMIT_MODE      7
 #define SPAWN_MODE       1
@@ -238,11 +238,13 @@ static const void *g_pendMtx = NULL;
 static volatile int g_pendDone = 0;
 
 void ShSpawnPump(void) {
-    uint64_t spec = g_pendSpec, mgr, spawner;
+    uint64_t spec, mgr, spawner;
     const void *mtx = g_pendMtx;
 
+    /* The pump now runs from concurrent ray callbacks: take the
+     * slot atomically so exactly one thread spawns the spec. */
+    spec = (uint64_t)InterlockedExchange64((volatile LONG64 *)&g_pendSpec, 0);
     if (!spec || !mtx) return;
-    g_pendSpec = 0;
 
     mgr = ((MgrGet_t)ImgAddr(RVA_MGR_GETTER))();
     if (mgr) {

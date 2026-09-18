@@ -10,8 +10,8 @@
 #include "scripthook.h"
 #include "image.h"
 
-#define SKEL_VT      SH_IMG(0x3ACBBD8)
-#define BONE_LOOKUP  SH_IMG(0xB435680)
+#define SKEL_VT SH_IMG(0x3acbb58)
+#define BONE_LOOKUP SH_IMG(0xb506270)
 
 /* Bones resolve from a name hash. The Head hash and the
  * pose layout come from Firejumper93's rig code.

@@ -12,7 +12,7 @@
 #include "scripthook.h"
 #include "image.h"
 
-#define BLUR_MATCH  SH_IMG(0x14E7625C)
+#define BLUR_MATCH SH_IMG(0x1485806c)
 #define BLUR_IMM    5
 #define BLUR_LEN    16
 

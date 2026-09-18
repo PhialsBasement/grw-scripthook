@@ -31,7 +31,7 @@
 #define RVA_REGISTRY     0x4BC17F8
 #define RVA_ARCH_DESC    0x42C2560
 #define RVA_NULL_BLOCK   0x4D88FE8
-#define NPC_SPEC_VTABLE  SH_IMG(0x394A660)
+#define NPC_SPEC_VTABLE SH_IMG(0x394a4e0)
 
 #define COMMIT_MODE      7
 #define SPAWN_MODE       1
@@ -199,24 +199,23 @@ static void DespawnOnGameThread(uint64_t entity) {
 void ShNpcPump(void) {
     int did = 0;
 
-    if (g_killEnt) {
-        uint64_t e = g_killEnt;
-        g_killEnt = 0;
+    uint64_t e = (uint64_t)InterlockedExchange64(
+        (volatile LONG64 *)&g_killEnt, 0);
+    if (e) {
         DespawnOnGameThread(e);
         g_killDone = 1;
         did = 1;
     }
 
-    if (g_listWanted) {
-        g_listWanted = 0;
+    if (InterlockedExchange((volatile LONG *)&g_listWanted, 0)) {
         ListOnGameThread();
         g_listDone = 1;
         did = 1;
     }
-    if (g_pendId) {
-        uint64_t id = g_pendId;
+    uint64_t id = (uint64_t)InterlockedExchange64(
+        (volatile LONG64 *)&g_pendId, 0);
+    if (id) {
         const void *mtx = g_pendMtx;
-        g_pendId = 0;
         if (mtx) SpawnOnGameThread(id, mtx);
         g_pendDone = 1;
         did = 1;

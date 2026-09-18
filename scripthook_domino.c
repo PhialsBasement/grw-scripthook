@@ -40,7 +40,7 @@ extern int ShRequireInGame(void);
 extern void ShSetError(int err);
 
 /* Same test the API uses: an entity is its vtable. */
-#define SH_VT_ENTITY SH_IMG(0x39C6FC8)
+#define SH_VT_ENTITY SH_IMG(0x39c6df8)
 
 static int IsEntity(uint64_t obj) {
     return obj && ShReadQ(obj) == SH_VT_ENTITY;
