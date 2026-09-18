@@ -15,6 +15,9 @@
  */
 #define HIT_SITE SH_IMG(0x14703f83)
 #define HIT_ORIG_CALL SH_IMG(0x29b4e00)
+/* TrailFX creation: the store of the weapon's final muzzle velocity
+ * into the new trail object (build 25120584). */
+#define VELOCITY_SITE_TRAIL SH_IMG(0x14756f1e)
 
 #define PROJ_LIST     0xA60
 #define PROJ_COUNT    0xA6A
@@ -48,6 +51,50 @@ static struct {
     void   *user;
     int     flags;
 } g_sinks[MAX_SINKS];
+
+/* Projectile velocity scaling. The trail site stores the weapon's
+ * final muzzle velocity into a fresh TrailFX; scaling it (and the
+ * object-local speed cap) scales both the visible tracer and the
+ * authoritative round, so one hook covers both. */
+static volatile LONG g_velocityMilli = 1000;
+static volatile LONG g_dropMilli = 1000;
+static volatile LONG g_trailCalls = 0;
+static int g_trajectoryReady = 0;
+static volatile float g_velocityScale = 1.0f;
+
+SH_API int ShSetProjectileVelocityMultiplier(float multiplier) {
+    LONG value;
+    if (!isfinite(multiplier)) { ShSetError(SH_ERR_BAD_ARG); return 0; }
+    if (multiplier < 0.10f) multiplier = 0.10f;
+    if (multiplier > 10.0f) multiplier = 10.0f;
+    value = (LONG)(multiplier * 1000.0f + 0.5f);
+    InterlockedExchange(&g_velocityMilli, value);
+    g_velocityScale = multiplier;
+    return 1;
+}
+
+SH_API int ShSetProjectileDropMultiplier(float multiplier) {
+    LONG value;
+    if (!isfinite(multiplier)) { ShSetError(SH_ERR_BAD_ARG); return 0; }
+    if (multiplier < 0.0f) multiplier = 0.0f;
+    if (multiplier > 10.0f) multiplier = 10.0f;
+    value = (LONG)(multiplier * 1000.0f + 0.5f);
+    InterlockedExchange(&g_dropMilli, value);
+    return 1;
+}
+
+SH_API float ShGetProjectileVelocityMultiplier(void) {
+    return (float)InterlockedCompareExchange(&g_velocityMilli,0,0) / 1000.0f;
+}
+
+SH_API float ShGetProjectileDropMultiplier(void) {
+    return (float)InterlockedCompareExchange(&g_dropMilli,0,0) / 1000.0f;
+}
+
+SH_API uint32_t ShGetProjectileTrailHookCount(void) {
+    return (uint32_t)InterlockedCompareExchange(&g_trailCalls,0,0);
+}
+
 
 static ShHit g_ring[HIT_RING];
 static volatile uint32_t g_ringHead = 0;
@@ -465,6 +512,59 @@ static void __attribute__((ms_abi)) HitDispatch(uint64_t proj) {
 /* The site is a CALL rel32, so the stolen instruction
  * cannot be copied: it is reissued absolutely instead.
  */
+
+/* At TrailFX creation xmm0 is the weapon's final muzzle velocity.
+ * RDI is the new TrailFX; +0x70 holds its resolved speed cap. Scale
+ * both once at spawn, retaining vanilla assistance and lifecycle. */
+static int InstallTrailVelocity(void){
+    static const uint8_t expected[]={0xF3,0x0F,0x11,0x47,0x28};
+    uint64_t site=VELOCITY_SITE_TRAIL;uint8_t *stub,*p,*skip1,*skip2,*vanilla,patch[5];int64_t rel;DWORD old;
+    if(!ShReadableAddr(site,5)||memcmp((const void*)(uintptr_t)site,expected,5))return 0;
+    stub=ShAllocNear(site);if(!stub)return 0;p=stub;
+    *p++=0x9C;*p++=0x50;*p++=0x52;
+    *p++=0x48;*p++=0x83;*p++=0xEC;*p++=0x10;
+    *p++=0xF3;*p++=0x0F;*p++=0x7F;*p++=0x0C;*p++=0x24;
+    *p++=0x48;*p++=0xBA;memcpy(p,(uint64_t[]){(uint64_t)(uintptr_t)&g_velocityScale},8);p+=8;
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0x4F;*p++=0x70;
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0x0A;
+    *p++=0xF3;*p++=0x0F;*p++=0x11;*p++=0x4F;*p++=0x70;
+    *p++=0xF3;*p++=0x0F;*p++=0x6F;*p++=0x0C;*p++=0x24;
+    *p++=0x48;*p++=0x83;*p++=0xC4;*p++=0x10;
+    *p++=0x66;*p++=0x0F;*p++=0x7E;*p++=0xC0;
+    *p++=0x41;*p++=0x39;*p++=0x87;*p++=0xB4;*p++=0x01;*p++=0x00;*p++=0x00;
+    *p++=0x75;skip1=p++;
+    *p++=0x41;*p++=0x39;*p++=0x87;*p++=0xB8;*p++=0x01;*p++=0x00;*p++=0x00;
+    *p++=0x75;skip2=p++;
+    *p++=0x48;*p++=0xBA;memcpy(p,(uint64_t[]){(uint64_t)(uintptr_t)&g_velocityScale},8);p+=8;
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0x02;
+    *p++=0x66;*p++=0x0F;*p++=0x7E;*p++=0xC2;
+    *p++=0xF0;*p++=0x41;*p++=0x0F;*p++=0xB1;*p++=0x97;*p++=0xB4;*p++=0x01;*p++=0x00;*p++=0x00;
+    vanilla=p;*skip1=(uint8_t)(vanilla-(skip1+1));*skip2=(uint8_t)(vanilla-(skip2+1));
+    memcpy(p,expected,sizeof(expected));p+=sizeof(expected);
+    *p++=0x48;*p++=0xB8;memcpy(p,(uint64_t[]){(uint64_t)(uintptr_t)&g_trailCalls},8);p+=8;
+    *p++=0xF0;*p++=0xFF;*p++=0x00;
+    *p++=0x5A;*p++=0x58;*p++=0x9D;
+    *p++=0xFF;*p++=0x25;memset(p,0,4);p+=4;memcpy(p,(uint64_t[]){site+5},8);
+    rel=(int64_t)(uintptr_t)stub-(int64_t)(site+5);if(rel>INT32_MAX||rel<INT32_MIN)return 0;
+    patch[0]=0xE9;*(int32_t*)(patch+1)=(int32_t)rel;
+    FlushInstructionCache(GetCurrentProcess(),stub,128);
+    if(!VirtualProtect((void*)(uintptr_t)site,5,PAGE_EXECUTE_READWRITE,&old))return 0;
+    memcpy((void*)(uintptr_t)site,patch,5);VirtualProtect((void*)(uintptr_t)site,5,old,&old);
+    FlushInstructionCache(GetCurrentProcess(),(void*)(uintptr_t)site,5);return 1;
+}
+
+static int InstallTrajectoryHook(void){
+    if(g_trajectoryReady)return 1;
+    if(!InstallTrailVelocity()){ShSetError(SH_ERR_HOOK_FAILED);return 0;}
+    g_trajectoryReady=1;return 1;
+}
+
+SH_API int ShBallisticsHookInstall(void){
+    int ok=InstallTrajectoryHook();
+    ShSetError(ok?SH_OK:SH_ERR_HOOK_FAILED);
+    return ok;
+}
+
 SH_API int ShHitHookInstall(void) {
     uint64_t fn = HIT_SITE;
     uint8_t *s;
@@ -524,6 +624,7 @@ SH_API int ShHitHookInstall(void) {
     FlushInstructionCache(GetCurrentProcess(),
                           (void *)(uintptr_t)fn, n);
     g_hitStub = s;
+    if (!InstallTrajectoryHook()) return 0;
     if (!g_pump)
         g_pump = CreateThread(NULL, 0, HitPump, NULL, 0, NULL);
     ShSetError(SH_OK);
