@@ -13,7 +13,7 @@
 /* FUN_146E02C00 returns *(DAT_144B87978 + 0x20), the
  * GR_GameFlow machine. Current state is machine+0x260.
  */
-#define GAMEFLOW_HOLDER SH_IMG(0x4B87978)
+#define GAMEFLOW_HOLDER SH_IMG(0x4b879f8)
 #define OFF_HOLDER_FLOW 0x020
 #define OFF_STATE_OWNER 0x018
 #define OFF_CURSTATE    0x260

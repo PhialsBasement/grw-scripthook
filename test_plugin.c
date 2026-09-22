@@ -5378,7 +5378,7 @@ done_fp:
 
 /* ---- player symbol resolution ---- */
 
-#define PLAYER_TF_VTABLE SH_IMG(0x39EA9F8)
+#define PLAYER_TF_VTABLE SH_IMG(0x39EA8B8)
 #define PLAYER_POS_OFF   0x90
 
 static uint8_t *g_playerTf = NULL;

@@ -13,8 +13,17 @@
 /* Inside FUN_154D38550, after its casts, where MOV RCX,RDI
  * has just put the projectile in RCX.
  */
-#define HIT_SITE      SH_IMG(0x14D387E3)
-#define HIT_ORIG_CALL SH_IMG(0x29B4970)
+#define HIT_SITE SH_IMG(0x14703f83)
+#define HIT_ORIG_CALL SH_IMG(0x29b4e00)
+/* TrailFX creation: the store of the weapon's final muzzle velocity
+ * into the new trail object (build 25120584). */
+#define VELOCITY_SITE_TRAIL SH_IMG(0x14756f1e)
+/* The trajectory accumulator store inside the same shot-line walk,
+ * decoded from the community "Ballistic Drop" plugin: [rbx+0xB0] is
+ * the shot's owner object, [owner] the entity it belongs to, and the
+ * store's y lane is the drop. */
+#define DROP_SITE        SH_IMG(0x14708f3c)
+#define DROP_ORIG_LEN    14
 
 #define PROJ_LIST     0xA60
 #define PROJ_COUNT    0xA6A
@@ -42,12 +51,64 @@ extern int ShReadableAddr(uint64_t addr, size_t len);
 extern uint64_t ShReadQ(uint64_t addr);
 extern void ShSetError(int err);
 extern void *ShAllocNear(uint64_t target);
+/* The non-blocking player lookup: the drop patch's owner gate is
+ * refreshed from the pump thread, off the frame path. */
+extern int ShPeekPlayer(ShPlayer *out);
 
 static struct {
     ShHitFn fn;
     void   *user;
     int     flags;
 } g_sinks[MAX_SINKS];
+
+/* Projectile velocity scaling. The trail site stores the weapon's
+ * final muzzle velocity into a fresh TrailFX; scaling it (and the
+ * object-local speed cap) scales both the visible tracer and the
+ * authoritative round, so one hook covers both. */
+static volatile LONG g_velocityMilli = 1000;
+static volatile LONG g_dropMilli = 1000;
+static volatile float g_dropScale = 1.0f;
+static volatile uint64_t g_dropOwner1 = 0, g_dropOwner2 = 0;
+static volatile uint64_t g_dropOwnerAt = 0;
+static int g_dropReady = 0;
+static volatile LONG g_trailCalls = 0;
+static int g_trajectoryReady = 0;
+static volatile float g_velocityScale = 1.0f;
+
+SH_API int ShSetProjectileVelocityMultiplier(float multiplier) {
+    LONG value;
+    if (!isfinite(multiplier)) { ShSetError(SH_ERR_BAD_ARG); return 0; }
+    if (multiplier < 0.10f) multiplier = 0.10f;
+    if (multiplier > 10.0f) multiplier = 10.0f;
+    value = (LONG)(multiplier * 1000.0f + 0.5f);
+    InterlockedExchange(&g_velocityMilli, value);
+    g_velocityScale = multiplier;
+    return 1;
+}
+
+SH_API int ShSetProjectileDropMultiplier(float multiplier) {
+    LONG value;
+    if (!isfinite(multiplier)) { ShSetError(SH_ERR_BAD_ARG); return 0; }
+    if (multiplier < 0.0f) multiplier = 0.0f;
+    if (multiplier > 10.0f) multiplier = 10.0f;
+    value = (LONG)(multiplier * 1000.0f + 0.5f);
+    InterlockedExchange(&g_dropMilli, value);
+    g_dropScale = multiplier;
+    return 1;
+}
+
+SH_API float ShGetProjectileVelocityMultiplier(void) {
+    return (float)InterlockedCompareExchange(&g_velocityMilli,0,0) / 1000.0f;
+}
+
+SH_API float ShGetProjectileDropMultiplier(void) {
+    return (float)InterlockedCompareExchange(&g_dropMilli,0,0) / 1000.0f;
+}
+
+SH_API uint32_t ShGetProjectileTrailHookCount(void) {
+    return (uint32_t)InterlockedCompareExchange(&g_trailCalls,0,0);
+}
+
 
 static ShHit g_ring[HIT_RING];
 static volatile uint32_t g_ringHead = 0;
@@ -78,7 +139,7 @@ static int WantsHit(const ShHit *hit, int flags) {
 /* Verified live: every Entity carries this vtable. Without
  * the check, junk handles pass as entities.
  */
-#define VT_ENTITY SH_IMG(0x39C6FC8)
+#define VT_ENTITY SH_IMG(0x39c6df8)
 
 static int IsEntity(uint64_t p) {
     if (!p || (p & 7) || !ShReadableAddr(p, 0x140)) return 0;
@@ -300,6 +361,18 @@ static DWORD WINAPI HitPump(LPVOID p) {
     for (;;) {
         uint32_t head = g_ringHead;
 
+        /* The drop patch gates on the local player's entity and root,
+         * which change across sessions: refresh them here, off the
+         * frame path. */
+        if (g_dropReady &&
+            GetTickCount64() - g_dropOwnerAt >= 500) {
+            ShPlayer p;
+            g_dropOwnerAt = GetTickCount64();
+            if (ShPeekPlayer(&p)) {
+                g_dropOwner1 = p.entity;
+                g_dropOwner2 = p.root;
+            }
+        }
         PumpShots();
         FlushSettled();
         head = g_ringHead;
@@ -465,6 +538,158 @@ static void __attribute__((ms_abi)) HitDispatch(uint64_t proj) {
 /* The site is a CALL rel32, so the stolen instruction
  * cannot be copied: it is reissued absolutely instead.
  */
+
+/* At TrailFX creation xmm0 is the weapon's final muzzle velocity.
+ * RDI is the new TrailFX; +0x70 holds its resolved speed cap. Scale
+ * both once at spawn, retaining vanilla assistance and lifecycle. */
+static int InstallTrailVelocity(void){
+    static const uint8_t expected[]={0xF3,0x0F,0x11,0x47,0x28};
+    uint64_t site=VELOCITY_SITE_TRAIL;uint8_t *stub,*p,*skip1,*skip2,*vanilla,patch[5];int64_t rel;DWORD old;
+    if(!ShReadableAddr(site,5)||memcmp((const void*)(uintptr_t)site,expected,5))return 0;
+    stub=ShAllocNear(site);if(!stub)return 0;p=stub;
+    *p++=0x9C;*p++=0x50;*p++=0x52;
+    *p++=0x48;*p++=0x83;*p++=0xEC;*p++=0x10;
+    *p++=0xF3;*p++=0x0F;*p++=0x7F;*p++=0x0C;*p++=0x24;
+    *p++=0x48;*p++=0xBA;memcpy(p,(uint64_t[]){(uint64_t)(uintptr_t)&g_velocityScale},8);p+=8;
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0x4F;*p++=0x70;
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0x0A;
+    *p++=0xF3;*p++=0x0F;*p++=0x11;*p++=0x4F;*p++=0x70;
+    *p++=0xF3;*p++=0x0F;*p++=0x6F;*p++=0x0C;*p++=0x24;
+    *p++=0x48;*p++=0x83;*p++=0xC4;*p++=0x10;
+    *p++=0x66;*p++=0x0F;*p++=0x7E;*p++=0xC0;
+    *p++=0x41;*p++=0x39;*p++=0x87;*p++=0xB4;*p++=0x01;*p++=0x00;*p++=0x00;
+    *p++=0x75;skip1=p++;
+    *p++=0x41;*p++=0x39;*p++=0x87;*p++=0xB8;*p++=0x01;*p++=0x00;*p++=0x00;
+    *p++=0x75;skip2=p++;
+    *p++=0x48;*p++=0xBA;memcpy(p,(uint64_t[]){(uint64_t)(uintptr_t)&g_velocityScale},8);p+=8;
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0x02;
+    *p++=0x66;*p++=0x0F;*p++=0x7E;*p++=0xC2;
+    *p++=0xF0;*p++=0x41;*p++=0x0F;*p++=0xB1;*p++=0x97;*p++=0xB4;*p++=0x01;*p++=0x00;*p++=0x00;
+    vanilla=p;*skip1=(uint8_t)(vanilla-(skip1+1));*skip2=(uint8_t)(vanilla-(skip2+1));
+    memcpy(p,expected,sizeof(expected));p+=sizeof(expected);
+    *p++=0x48;*p++=0xB8;memcpy(p,(uint64_t[]){(uint64_t)(uintptr_t)&g_trailCalls},8);p+=8;
+    *p++=0xF0;*p++=0xFF;*p++=0x00;
+    *p++=0x5A;*p++=0x58;*p++=0x9D;
+    *p++=0xFF;*p++=0x25;memset(p,0,4);p+=4;memcpy(p,(uint64_t[]){site+5},8);
+    rel=(int64_t)(uintptr_t)stub-(int64_t)(site+5);if(rel>INT32_MAX||rel<INT32_MIN)return 0;
+    patch[0]=0xE9;*(int32_t*)(patch+1)=(int32_t)rel;
+    FlushInstructionCache(GetCurrentProcess(),stub,128);
+    if(!VirtualProtect((void*)(uintptr_t)site,5,PAGE_EXECUTE_READWRITE,&old))return 0;
+    memcpy((void*)(uintptr_t)site,patch,5);VirtualProtect((void*)(uintptr_t)site,5,old,&old);
+    FlushInstructionCache(GetCurrentProcess(),(void*)(uintptr_t)site,5);return 1;
+}
+
+/* The drop patch: scale the y lane of the per-step trajectory
+ * accumulator the engine stores at [rbx+0x1A0], for the local
+ * player's shots only. The stub reproduces the engine's own flat-shot
+ * value (the per-axis projection of this step's increment) and lerps
+ * the stored lane toward it by the live scale - 1.0 vanilla, 0.0
+ * flat, past 1.0 extrapolated drop. */
+static int InstallDropScale(void){
+    static const uint8_t expected[DROP_ORIG_LEN]={
+        0x0F,0x29,0x83,0xA0,0x01,0x00,0x00,      /* movaps [rbx+1A0],xmm0 */
+        0x0F,0x5C,0x8B,0x90,0x01,0x00,0x00       /* subps  xmm1,[rbx+190] */
+    };
+    uint64_t site=DROP_SITE;uint8_t *stub,*p,*q,patch[DROP_ORIG_LEN];DWORD old;
+    int oJe1=0,oJge=0,oJe2=0,oScale=0,oJne=0,restore=0;
+    if(g_dropReady)return 1;
+    if(!ShReadableAddr(site,DROP_ORIG_LEN)||
+       memcmp((void*)(uintptr_t)site,expected,DROP_ORIG_LEN))return 0;
+    stub=ShAllocNear(site);if(!stub)return 0;p=stub;
+    *p++=0x9C;*p++=0x50;*p++=0x41;*p++=0x52;              /* pushfq; push rax; push r10 */
+    *p++=0x48;*p++=0x83;*p++=0xEC;*p++=0xA0;              /* sub rsp,0A0h */
+    *p++=0x0F;*p++=0x11;*p++=0x14;*p++=0x24;              /* movups [rsp],xmm2 */
+    *p++=0x0F;*p++=0x11;*p++=0x5C;*p++=0x24;*p++=0x10;    /* movups [rsp+10h],xmm3 */
+    *p++=0x0F;*p++=0x11;*p++=0x64;*p++=0x24;*p++=0x20;    /* movups [rsp+20h],xmm4 */
+    *p++=0x0F;*p++=0x11;*p++=0x6C;*p++=0x24;*p++=0x30;    /* movups [rsp+30h],xmm5 */
+    *p++=0x48;*p++=0x8B;*p++=0x83;*(uint32_t*)p=0x000000B0u;p+=4; /* mov rax,[rbx+B0h] */
+    *p++=0x48;*p++=0x85;*p++=0xC0;                        /* test rax,rax */
+    *p++=0x0F;*p++=0x84;oJe1=(int)(p-stub);*(uint32_t*)p=0;p+=4;   /* je restore */
+    *p++=0x83;*p++=0x78;*p++=0x0C;*p++=0x00;              /* cmp dword [rax+Ch],0 */
+    *p++=0x0F;*p++=0x8D;oJge=(int)(p-stub);*(uint32_t*)p=0;p+=4;   /* jge restore */
+    *p++=0x48;*p++=0x8B;*p++=0x00;                        /* mov rax,[rax] */
+    *p++=0x48;*p++=0x85;*p++=0xC0;                        /* test rax,rax */
+    *p++=0x0F;*p++=0x84;oJe2=(int)(p-stub);*(uint32_t*)p=0;p+=4;   /* je restore */
+    /* the owner gate: only the local player's shots are scaled */
+    *p++=0x49;*p++=0xBA;*(uint64_t*)p=(uint64_t)(uintptr_t)&g_dropOwner1;p+=8;
+    *p++=0x49;*p++=0x3B;*p++=0x02;                        /* cmp rax,[r10] */
+    *p++=0x0F;*p++=0x84;oScale=(int)(p-stub);*(uint32_t*)p=0;p+=4; /* je scale-path */
+    *p++=0x49;*p++=0xBA;*(uint64_t*)p=(uint64_t)(uintptr_t)&g_dropOwner2;p+=8;
+    *p++=0x49;*p++=0x3B;*p++=0x02;                        /* cmp rax,[r10] */
+    *p++=0x0F;*p++=0x85;oJne=(int)(p-stub);*(uint32_t*)p=0;p+=4;   /* jne restore */
+    /* scale path */
+    *p++=0x0F;*p++=0x11;*p++=0x44;*p++=0x24;*p++=0x40;    /* movups [rsp+40h],xmm0 */
+    *p++=0x0F;*p++=0x11;*p++=0x4C;*p++=0x24;*p++=0x50;    /* movups [rsp+50h],xmm1 */
+    *p++=0x0F;*p++=0x28;*p++=0xD0;                        /* movaps xmm2,xmm0 */
+    *p++=0x0F;*p++=0x5C;*p++=0x93;*(uint32_t*)p=0x00000190u;p+=4; /* subps xmm2,[rbx+190h] */
+    *p++=0x0F;*p++=0x11;*p++=0x54;*p++=0x24;*p++=0x60;    /* movups [rsp+60h],xmm2 */
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0x5C;*p++=0x24;*p++=0x60;  /* movss xmm3,[rsp+60h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0x9B;*(uint32_t*)p=0x00000130u;p+=4; /* mulss xmm3,[rbx+130h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0x64;*p++=0x24;*p++=0x64;  /* movss xmm4,[rsp+64h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0xA3;*(uint32_t*)p=0x00000134u;p+=4; /* mulss xmm4,[rbx+134h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x58;*p++=0xDC;              /* addss xmm3,xmm4 */
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0x64;*p++=0x24;*p++=0x68;  /* movss xmm4,[rsp+68h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0xA3;*(uint32_t*)p=0x00000138u;p+=4; /* mulss xmm4,[rbx+138h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x58;*p++=0xDC;              /* addss xmm3,xmm4 */
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0xA3;*(uint32_t*)p=0x00000138u;p+=4; /* movss xmm4,[rbx+138h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0xE3;              /* mulss xmm4,xmm3 */
+    *p++=0xF3;*p++=0x0F;*p++=0x58;*p++=0xA3;*(uint32_t*)p=0x00000198u;p+=4; /* addss xmm4,[rbx+198h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x10;*p++=0x5C;*p++=0x24;*p++=0x48;  /* movss xmm3,[rsp+48h] */
+    *p++=0xF3;*p++=0x0F;*p++=0x5C;*p++=0xDC;              /* subss xmm3,xmm4 */
+    *p++=0x49;*p++=0xBA;*(uint64_t*)p=(uint64_t)(uintptr_t)&g_dropScale;p+=8;
+    *p++=0xF3;*p++=0x41;*p++=0x0F;*p++=0x10;*p++=0x12;    /* movss xmm2,[r10] */
+    *p++=0xF3;*p++=0x0F;*p++=0x59;*p++=0xD3;              /* mulss xmm3,xmm2 */
+    *p++=0xF3;*p++=0x0F;*p++=0x58;*p++=0xE3;              /* addss xmm4,xmm3 */
+    *p++=0xF3;*p++=0x0F;*p++=0x11;*p++=0x64;*p++=0x24;*p++=0x48;  /* movss [rsp+48h],xmm4 */
+    *p++=0xF3;*p++=0x0F;*p++=0x11;*p++=0x64;*p++=0x24;*p++=0x58;  /* movss [rsp+58h],xmm4 */
+    *p++=0x0F;*p++=0x10;*p++=0x44;*p++=0x24;*p++=0x40;    /* movups xmm0,[rsp+40h] */
+    *p++=0x0F;*p++=0x10;*p++=0x4C;*p++=0x24;*p++=0x50;    /* movups xmm1,[rsp+50h] */
+    /* restore path */
+    restore=(int)(p-stub);
+    *p++=0x0F;*p++=0x10;*p++=0x14;*p++=0x24;              /* movups xmm2,[rsp] */
+    *p++=0x0F;*p++=0x10;*p++=0x5C;*p++=0x24;*p++=0x10;    /* movups xmm3,[rsp+10h] */
+    *p++=0x0F;*p++=0x10;*p++=0x64;*p++=0x24;*p++=0x20;    /* movups xmm4,[rsp+20h] */
+    *p++=0x0F;*p++=0x10;*p++=0x6C;*p++=0x24;*p++=0x30;    /* movups xmm5,[rsp+30h] */
+    *p++=0x48;*p++=0x83;*p++=0xC4;*p++=0xA0;              /* add rsp,0A0h */
+    *p++=0x41;*p++=0x5A;*p++=0x58;*p++=0x9D;              /* pop r10; pop rax; popfq */
+    memcpy(p,expected,DROP_ORIG_LEN);p+=DROP_ORIG_LEN;   /* the displaced instructions */
+    *p++=0xFF;*p++=0x25;*(uint32_t*)p=0;p+=4;*(uint64_t*)p=site+DROP_ORIG_LEN;p+=8;
+    /* land all five jumps */
+    *(int32_t*)(stub+oJe1)=restore-(oJe1+4);
+    *(int32_t*)(stub+oJge)=restore-(oJge+4);
+    *(int32_t*)(stub+oJe2)=restore-(oJe2+4);
+    *(int32_t*)(stub+oJne)=restore-(oJne+4);
+    q=stub;
+    while(q+5<p && !(q[0]==0x0F&&q[1]==0x11&&q[2]==0x44&&q[3]==0x24&&q[4]==0x40)) q++;
+    *(int32_t*)(stub+oScale)=(int)(q-stub)-(oScale+4);
+    FlushInstructionCache(GetCurrentProcess(),stub,(SIZE_T)(p-stub));
+    /* the site becomes a pure absolute jump into the stub */
+    patch[0]=0xFF;patch[1]=0x25;*(uint32_t*)(patch+2)=0;
+    *(uint64_t*)(patch+6)=(uint64_t)(uintptr_t)stub;
+    if(!VirtualProtect((void*)(uintptr_t)site,DROP_ORIG_LEN,PAGE_EXECUTE_READWRITE,&old))return 0;
+    memcpy((void*)(uintptr_t)site,patch,DROP_ORIG_LEN);
+    VirtualProtect((void*)(uintptr_t)site,DROP_ORIG_LEN,old,&old);
+    FlushInstructionCache(GetCurrentProcess(),(void*)(uintptr_t)site,DROP_ORIG_LEN);
+    g_dropReady=1;
+    return 1;
+}
+
+static int InstallTrajectoryHook(void){
+    if(g_trajectoryReady)return 1;
+    if(!InstallTrailVelocity()){ShSetError(SH_ERR_HOOK_FAILED);return 0;}
+    g_trajectoryReady=1;
+    /* The drop patch stands on its own: a build that disagrees with it
+     * keeps the velocity scaling. */
+    InstallDropScale();
+    return 1;
+}
+
+SH_API int ShBallisticsHookInstall(void){
+    int ok=InstallTrajectoryHook();
+    ShSetError(ok?SH_OK:SH_ERR_HOOK_FAILED);
+    return ok;
+}
+
 SH_API int ShHitHookInstall(void) {
     uint64_t fn = HIT_SITE;
     uint8_t *s;
@@ -524,6 +749,7 @@ SH_API int ShHitHookInstall(void) {
     FlushInstructionCache(GetCurrentProcess(),
                           (void *)(uintptr_t)fn, n);
     g_hitStub = s;
+    if (!InstallTrajectoryHook()) return 0;
     if (!g_pump)
         g_pump = CreateThread(NULL, 0, HitPump, NULL, 0, NULL);
     ShSetError(SH_OK);

@@ -603,6 +603,41 @@ SH_API int ShMenuStatus(uint32_t menu, const char *text) {
     return 1;
 }
 
+/* Update an existing number item's value in place (clamped to its
+ * range) so live state shows without rebuilding the menu. */
+SH_API int ShMenuSetNumber(uint32_t menu, const char *label, float value) {
+    Menu *m; int i, found = 0;
+    if (!label) return 0;
+    Lock(); m = MenuOf(menu);
+    if (m) {
+        for (i = m->count - 1; i >= 0; i--) {
+            Item *it = &m->items[i];
+            if (it->kind == IT_NUMBER && strcmp(it->label, label) == 0) {
+                if (value < it->lo) value = it->lo;
+                if (value > it->hi) value = it->hi;
+                it->num = value; found = 1; break;
+            }
+        }
+    }
+    Unlock(); return found;
+}
+
+/* Update an existing toggle item's state in place. */
+SH_API int ShMenuSetToggle(uint32_t menu, const char *label, int value) {
+    Menu *m; int i, found = 0;
+    if (!label) return 0;
+    Lock(); m = MenuOf(menu);
+    if (m) {
+        for (i = m->count - 1; i >= 0; i--) {
+            Item *it = &m->items[i];
+            if (it->kind == IT_TOGGLE && strcmp(it->label, label) == 0) {
+                it->value = value ? 1 : 0; found = 1; break;
+            }
+        }
+    }
+    Unlock(); return found;
+}
+
 SH_API void ShMenuSetKey(int vk) { g_key = vk; }
 SH_API int  ShMenuIsOpen(void) { return g_open; }
 

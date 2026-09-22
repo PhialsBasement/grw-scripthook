@@ -764,6 +764,27 @@ SH_API int  ShGetCamera(ShCamera *out);
 SH_API int  ShSetCamera(const ShVec3 *pos);
 SH_API int  ShCameraOrbit(float back, float up);
 
+/* Projectile velocity scaling: multiplies the muzzle velocity the
+ * engine stores into each new projectile trail, which drives both the
+ * visible tracer and the authoritative round. 1.0f is vanilla.
+ * Install the underlying hook with ShBallisticsHookInstall before
+ * setting a multiplier other than 1. */
+SH_API int   ShSetProjectileVelocityMultiplier(float multiplier);
+SH_API int   ShSetProjectileDropMultiplier(float multiplier);
+SH_API float ShGetProjectileVelocityMultiplier(void);
+SH_API float ShGetProjectileDropMultiplier(void);
+SH_API uint32_t ShGetProjectileTrailHookCount(void);
+SH_API int   ShBallisticsHookInstall(void);
+
+/* Orbit with a sideways (camera-right) offset in metres. */
+SH_API int  ShCameraOrbitAdvanced(float back, float right, float up);
+
+/* Update an existing menu item in place: number values clamp to the
+ * item's range; toggles take 0/1. Returns 0 when no item matches. */
+SH_API int  ShMenuSetNumber(uint32_t menu, const char *label, float value);
+SH_API int  ShMenuSetToggle(uint32_t menu, const char *label, int value);
+
+
 /** Free camera. Radians, yaw 0 faces +y, pitch up positive.
  *  ShCameraAngles reads the current view to start from.
  */

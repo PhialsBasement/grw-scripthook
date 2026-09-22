@@ -11,9 +11,9 @@
 #include "log.h"
 
 /* Static anchors, verified in FINDINGS.md */
-#define SH_PLAYER_GLOBAL   SH_IMG(0x4BC3358)
-#define SH_VT_ENTITY       SH_IMG(0x39C6FC8)
-#define SH_VT_SKELETON     SH_IMG(0x3ACBBD8)
+#define SH_PLAYER_GLOBAL SH_IMG(0x4bc33e0)
+#define SH_VT_ENTITY SH_IMG(0x39c6df8)
+#define SH_VT_SKELETON SH_IMG(0x3acbb58)
 
 /* Object layout */
 #define OFF_ENT_NODE       0x18
@@ -358,8 +358,8 @@ static int ShNear(const ShVec3 *a, const ShVec3 *b, float tol) {
 /* The engine's own accessor, FUN_140D43530 and the two
  * calls after it. No scanning. See FINDINGS.md.
  */
-#define SH_PLAYER_MGR    SH_IMG(0x4BB6438)
-#define SH_SLOT_INDEX    SH_IMG(0x4D84E98)
+#define SH_PLAYER_MGR SH_IMG(0x4bb64b8)
+#define SH_SLOT_INDEX SH_IMG(0x4d84f18)
 #define OFF_MGR_OBJ      0x98
 #define OFF_OBJ_TABLE    0xD10
 #define OFF_TABLE_SLOTS  0x08
@@ -556,7 +556,7 @@ SH_API int ShGetVersion(void) {
 /* Engine set transform: flags the entity dirty and
  * propagates to children, so it moves vehicles too.
  */
-#define SH_SET_TRANSFORM   SH_IMG(0xC6BDE10)
+#define SH_SET_TRANSFORM SH_IMG(0xc46b7b0)
 
 typedef void (__attribute__((ms_abi)) *SetTransform_t)(uint64_t,
                                                        void *, char);

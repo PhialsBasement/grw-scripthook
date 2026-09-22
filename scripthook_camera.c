@@ -17,8 +17,8 @@
 /* The projection selector. It takes the camera in RCX and
  * runs every frame, which is what makes it hookable.
  */
-#define CAM_THUNK   SH_IMG(0x13781B0)
-#define CAM_IMPL    SH_IMG(0xD7C0610)
+#define CAM_THUNK SH_IMG(0x13796d0)
+#define CAM_IMPL SH_IMG(0xd67ffa0)
 
 /* Verified live: +0x2B0 is vertical fov in radians, planes
  * beside it. +0x2BC is an ASPECT multiplier, which the
@@ -41,9 +41,9 @@
 /* The camera manager, one frame ahead of the camera build.
  * The behaviour's transform lands here first, so an override
  * placed here reaches culling and the matrices together. */
-#define MGR_SITE    SH_IMG(0x7E888FE)
+#define MGR_SITE SH_IMG(0x81e0b7e)
 #define MGR_LEN     5
-#define MGR_NEXT    SH_IMG(0x10D8890)
+#define MGR_NEXT SH_IMG(0x10d8e20)
 
 /* Verified live in gameplay: the mode at +0x6C reads 3, so
  * consumers take the position from +0x170 while the render
@@ -77,6 +77,7 @@ static volatile uint64_t g_uiAt = 0;
 
 static ShVec3 g_absPos;
 static volatile float g_back = 0.0f;
+static volatile float g_right = 0.0f;
 static volatile float g_up = 0.0f;
 static volatile float g_yaw = 0.0f;
 static volatile float g_pitch = 0.0f;
@@ -130,9 +131,9 @@ static void ApplyOrbit(float *m) {
 
     if (!ShGetPlayerPosition(&p)) return;
     WritePos(m,
-             p.x - m[4] * g_back,
-             p.y - m[5] * g_back,
-             p.z - m[6] * g_back + g_up);
+             p.x - m[4] * g_back + m[0] * g_right,
+             p.y - m[5] * g_back + m[1] * g_right,
+             p.z - m[6] * g_back + m[2] * g_right + g_up);
 }
 
 /* Game basis: x right, y forward, z up. Rebuilt absolutely
@@ -604,6 +605,19 @@ SH_API int ShSetCamera(const ShVec3 *pos) {
 SH_API int ShCameraOrbit(float back, float up) {
     if (!ShCameraHookInstall()) return 0;
     g_back = back;
+    g_up = up;
+    g_apply = (g_apply & ~CAM_HEAD_BIT) | SH_CAM_POS | CAM_ORBIT_BIT;
+    ShSetError(SH_OK);
+    return 1;
+}
+
+/* Orbit with an explicit sideways offset: the camera sits back
+ * g_back along the view, g_right along the camera's right axis and
+ * g_up above the player. */
+SH_API int ShCameraOrbitAdvanced(float back, float right, float up) {
+    if (!ShCameraHookInstall()) return 0;
+    g_back = back;
+    g_right = right;
     g_up = up;
     g_apply = (g_apply & ~CAM_HEAD_BIT) | SH_CAM_POS | CAM_ORBIT_BIT;
     ShSetError(SH_OK);

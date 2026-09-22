@@ -8,24 +8,24 @@
 #include "image.h"
 #include "log.h"
 
-#define F_ALLOC_CTX     SH_IMG(0xE064390)
-#define F_ALLOC         SH_IMG(0x60ACBF0)
-#define G_POOL          SH_IMG(0x4D78D00)
-#define F_SCENE_CTOR    SH_IMG(0x32EEC50)
-#define F_SCENE_DTOR    SH_IMG(0x32EECD0)
-#define F_SCENE_TICK    SH_IMG(0x173FA610)
-#define F_SCENE_FLIP    SH_IMG(0x173FA280)
-#define F_SCENE_RENDER  SH_IMG(0x173F8C60)
-#define F_SCENE_RESIZE  SH_IMG(0x173F8400)
-#define F_SCENE_SETCTX  SH_IMG(0x173F9930)
-#define F_SCENE_SETRES  SH_IMG(0x173F9160)
-#define F_ATTACH        SH_IMG(0x32F4D00)
-#define F_FREE          SH_IMG(0xF93CA90)
-#define F_LOCK          SH_IMG(0x36206D0)
-#define F_UNLOCK        SH_IMG(0x3287730)
-#define RENDER_THUNK    SH_IMG(0x32EEFB0)
-#define G_UIMGR         SH_IMG(0x4D58560)
-#define VT_GAME_RESOLVER SH_IMG(0x3A05AA0)
+#define F_ALLOC_CTX SH_IMG(0xe410100)
+#define F_ALLOC SH_IMG(0x674f1a0)
+#define G_POOL SH_IMG(0x4d78d80)
+#define F_SCENE_CTOR SH_IMG(0x32ee140)
+#define F_SCENE_DTOR SH_IMG(0x32ee1c0)
+#define F_SCENE_TICK SH_IMG(0x16b9bb20)
+#define F_SCENE_FLIP SH_IMG(0x16b9b440)
+#define F_SCENE_RENDER SH_IMG(0x16b99a30)
+#define F_SCENE_RESIZE SH_IMG(0x16b98d80)
+#define F_SCENE_SETCTX SH_IMG(0x16b9a730)
+#define F_SCENE_SETRES SH_IMG(0x16b99dc0)
+#define F_ATTACH SH_IMG(0x32f4230)
+#define F_FREE SH_IMG(0xe4f8110)
+#define F_LOCK SH_IMG(0x3621550)
+#define F_UNLOCK SH_IMG(0x3286ff0)
+#define RENDER_THUNK SH_IMG(0x32ee4a0)
+#define G_UIMGR SH_IMG(0x4d585e0)
+#define VT_GAME_RESOLVER SH_IMG(0x3a05a00)
 
 /* scene private */
 #define SP_STATE     0x368
@@ -501,14 +501,19 @@ static int RunJob(uint64_t fn, uint64_t sid) {
 
 /* physics step entry: only until the first render */
 void ShSceneTick(void) {
+    static volatile LONG claim = 0;
     int i;
 
+    /* RayHookCallback can now run on several worker threads at
+     * once; only one of them may tick the scenes. */
     if (g_frame != 0) return;
+    if (InterlockedCompareExchange(&claim, 1, 0) != 0) return;
     for (i = 0; i < MAX_SCENES; i++) {
         int32_t res = 0;
         if (!g_s[i].live || !g_s[i].visible) continue;
         ((Scene3)F_SCENE_TICK)(g_s[i].handle, &res, TICK_MS);
     }
+    InterlockedExchange(&claim, 0);
 }
 
 /* ---- table API for scripthook_ui.c ---- */

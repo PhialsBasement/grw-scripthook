@@ -10,7 +10,7 @@
 #include "image.h"
 
 /* mulss xmm8, xmm9, the awareness scale in the detector. */
-#define VIS_SITE  SH_IMG(0x14393508)
+#define VIS_SITE SH_IMG(0x13beac48)
 #define VIS_LEN   5
 
 extern void ShSetError(int err);
