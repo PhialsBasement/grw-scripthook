@@ -13,8 +13,8 @@
 /* Inside FUN_154D38550, after its casts, where MOV RCX,RDI
  * has just put the projectile in RCX.
  */
-#define HIT_SITE      SH_IMG(0x14D387E3)
-#define HIT_ORIG_CALL SH_IMG(0x29B4970)
+#define HIT_SITE      SH_IMG(0x14703F83)
+#define HIT_ORIG_CALL SH_IMG(0x29B4E00)
 
 #define PROJ_LIST     0xA60
 #define PROJ_COUNT    0xA6A
@@ -78,7 +78,7 @@ static int WantsHit(const ShHit *hit, int flags) {
 /* Verified live: every Entity carries this vtable. Without
  * the check, junk handles pass as entities.
  */
-#define VT_ENTITY SH_IMG(0x39C6FC8)
+#define VT_ENTITY SH_IMG(0x39C6DF8)
 
 static int IsEntity(uint64_t p) {
     if (!p || (p & 7) || !ShReadableAddr(p, 0x140)) return 0;

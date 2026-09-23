@@ -13,7 +13,7 @@
 #include "image.h"
 
 /* mov [rax+0x180], ecx   rax is the camera manager. */
-#define FOV_SITE  SH_IMG(0x7E889A2)
+#define FOV_SITE  SH_IMG(0x81E0C22)
 #define FOV_LEN   6
 
 /* Engine values under 0.5 rad are zoom optics at work:

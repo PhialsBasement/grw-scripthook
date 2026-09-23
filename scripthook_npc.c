@@ -10,28 +10,28 @@
 #include "image.h"
 
 /* RVAs, so this survives a relocated image. */
-#define RVA_MGR_GETTER   0x916DC40
-#define RVA_SPAWN        0x916D5E0
-#define RVA_COMMIT       0x916E590
-#define RVA_SET_CATEGORY 0xA62A8A0
-#define RVA_SET_174      0xA62B3B0
-#define RVA_POP_REGISTER 0x85B7240
-#define RVA_COLLECT      0xC41D6C0
-#define RVA_KIND         0x83B1390
-#define RVA_POOL_FIND    0xDF4EE30
+#define RVA_MGR_GETTER   0x990BAB0
+#define RVA_SPAWN        0x990B0B0
+#define RVA_COMMIT       0x990CA70
+#define RVA_SET_CATEGORY 0xA9E51B0
+#define RVA_SET_174      0xA9E63B0
+#define RVA_POP_REGISTER 0x8AE8EA0
+#define RVA_COLLECT      0xC1F5BA0
+#define RVA_KIND         0x89372E0
+#define RVA_POOL_FIND    0xE2E0780
 
 /* Despawn, from the Domino UnspawnFromEntity node: the
  * entity's spawning spec, then retire it. Verified live. */
-#define RVA_SPEC_OF      0xA604700
-#define RVA_RETIRE       0x921A2F0
+#define RVA_SPEC_OF      0xA9C3F80
+#define RVA_RETIRE       0x99FE180
 
-#define RVA_POOL         0x4D89000
-#define RVA_POPMGR       0x4B98F18
-#define RVA_CONTEXT      0x4B90208
-#define RVA_REGISTRY     0x4BC17F8
-#define RVA_ARCH_DESC    0x42C2560
-#define RVA_NULL_BLOCK   0x4D88FE8
-#define NPC_SPEC_VTABLE  SH_IMG(0x394A660)
+#define RVA_POOL         0x4D89080
+#define RVA_POPMGR       0x4B98FA8
+#define RVA_CONTEXT      0x4B90288
+#define RVA_REGISTRY     0x4BC1878
+#define RVA_ARCH_DESC    0x42C2570
+#define RVA_NULL_BLOCK   0x4D89068
+#define NPC_SPEC_VTABLE  SH_IMG(0x394A4E0)
 
 #define COMMIT_MODE      7
 #define SPAWN_MODE       1

@@ -10,7 +10,7 @@
 #include "scripthook.h"
 #include "image.h"
 
-#define INV_VTABLE   SH_IMG(0x3905CF0)
+#define INV_VTABLE   SH_IMG(0x3905C18)
 #define OFF_OWNER    0x250
 #define SLOT_STRIDE  0x28
 #define OFF_AMMO     0x180

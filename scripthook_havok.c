@@ -16,15 +16,15 @@
 /* hknpBodyManager::allocateBody. Its rcx is the manager,
  * and the manager is hknpWorld + 0x18.
  */
-#define HK_ALLOC_BODY   SH_IMG(0x16990140)
+#define HK_ALLOC_BODY   SH_IMG(0x163CA8C0)
 #define HK_ALLOC_LEN    5
 #define STUB_SLOT       0x800
 
-#define RB_VT_BASE      SH_IMG(0x3AD55D8)
-#define RB_VT_VEHICLE   SH_IMG(0x3AD7020)
-#define RB_VT_C         SH_IMG(0x39E7620)
-#define RB_VT_D         SH_IMG(0x38C88B0)
-#define RB_VT_E         SH_IMG(0x39979C8)
+#define RB_VT_BASE      SH_IMG(0x3AD54F8)
+#define RB_VT_VEHICLE   SH_IMG(0x3AD6F48)
+#define RB_VT_C         SH_IMG(0x39E74E0)
+#define RB_VT_D         SH_IMG(0x38C8820)
+#define RB_VT_E         SH_IMG(0x39977B8)
 
 #define RB_ENTITY       0x10
 
@@ -142,7 +142,7 @@ SH_API uint64_t ShHavokWorld(void) {
 /* Cars and characters share this vtable, so it is the
  * one test that holds across every RigidBody class.
  */
-#define SH_VT_ENTITY  SH_IMG(0x39C6FC8)
+#define SH_VT_ENTITY  SH_IMG(0x39C6DF8)
 
 static int IsEntity(uint64_t e) {
     if (e < 0x10000ULL || (e & 7)) return 0;

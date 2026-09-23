@@ -39,7 +39,7 @@ static uint64_t RQ(uint64_t a) {
 }
 
 static int InImage(uint64_t a) {
-    return a >= SH_IMG(0) && a < SH_IMG(0x18B09000);
+    return a >= SH_IMG(0) && a < SH_IMG(0x185BA000);
 }
 
 /* RTTI: vtable, then object locator, then type descriptor,

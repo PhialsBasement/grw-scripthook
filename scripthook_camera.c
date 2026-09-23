@@ -17,8 +17,8 @@
 /* The projection selector. It takes the camera in RCX and
  * runs every frame, which is what makes it hookable.
  */
-#define CAM_THUNK   SH_IMG(0x13781B0)
-#define CAM_IMPL    SH_IMG(0xD7C0610)
+#define CAM_THUNK   SH_IMG(0x13796D0)
+#define CAM_IMPL    SH_IMG(0xD67FFA0)
 
 /* Verified live: +0x2B0 is vertical fov in radians, planes
  * beside it. +0x2BC is an ASPECT multiplier, which the
@@ -41,9 +41,9 @@
 /* The camera manager, one frame ahead of the camera build.
  * The behaviour's transform lands here first, so an override
  * placed here reaches culling and the matrices together. */
-#define MGR_SITE    SH_IMG(0x7E888FE)
+#define MGR_SITE    SH_IMG(0x81E0B7E)
 #define MGR_LEN     5
-#define MGR_NEXT    SH_IMG(0x10D8890)
+#define MGR_NEXT    SH_IMG(0x10D8E20)
 
 /* Verified live in gameplay: the mode at +0x6C reads 3, so
  * consumers take the position from +0x170 while the render

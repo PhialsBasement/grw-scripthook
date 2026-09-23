@@ -11,15 +11,15 @@
 #include "image.h"
 
 /* RVAs, so this survives a relocated image. */
-#define RVA_MGR_GETTER   0x916DC40
-#define RVA_SPAWN        0x916D5E0
-#define RVA_COMMIT       0x916E590
+#define RVA_MGR_GETTER   0x990BAB0
+#define RVA_SPAWN        0x990B0B0
+#define RVA_COMMIT       0x990CA70
 
 /* A vehicle is named by a masked handle: the kind hash
  * below, with the vehicle id in the high dword.
  */
 #define VEH_KIND_HASH    0x8F2CBBBAu
-#define SPEC_VTABLE      SH_IMG(0x394A1E0)
+#define SPEC_VTABLE      SH_IMG(0x394A060)
 #define SPEC_HANDLE_OFF  0x28
 #define COMMIT_MODE      7
 #define SPAWN_MODE       1

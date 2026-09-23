@@ -11,8 +11,8 @@
 #include <math.h>
 
 /* Verified entry points, see GROUND_QUERY.md */
-#define RAY_HOOK_SITE   SH_IMG(0x169B7630)
-#define CAST_RAY_FN     SH_IMG(0xFBE88D0)
+#define RAY_HOOK_SITE   SH_IMG(0x163F18D0)
+#define CAST_RAY_FN     SH_IMG(0xFBB3580)
 
 /* The engine's own 0x4000 mask rejects every hit in this
  * world, so query permissively and filter by distance.

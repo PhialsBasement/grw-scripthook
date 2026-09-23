@@ -12,30 +12,30 @@
 #include "log.h"
 
 /* Engine entry points as RVAs. See FINDINGS, UI SYSTEM. */
-#define F_ALLOC_CTX     SH_IMG(0xE064390)
-#define F_ALLOC         SH_IMG(0x60ACBF0)
-#define G_POOL          SH_IMG(0x4D78D00)
-#define F_CONT_CTOR     SH_IMG(0x32F5E70)
-#define F_ATTACH        SH_IMG(0x32F4D00)
-#define F_DIRTY         SH_IMG(0x17408BA0)
-#define F_LINST_CTOR    SH_IMG(0x336F0B0)
-#define F_LABEL_CREATE  SH_IMG(0x336F7F0)
-#define F_LABEL_APPLY   SH_IMG(0x336F7B0)
-#define F_LABEL_TEXT    SH_IMG(0x3336E30)
-#define F_LABEL_SIZE    SH_IMG(0x3336EE0)
-#define F_LABEL_UPDATE  SH_IMG(0x17490300)
-#define F_LABEL_REGIST  SH_IMG(0x33359F0)
-#define F_IINST_CTOR    SH_IMG(0x336E7F0)
-#define F_IMAGE_CREATE  SH_IMG(0x336EC80)
-#define F_IMAGE_APPLY   SH_IMG(0x336EC30)
-#define F_WIDGET_COLOUR SH_IMG(0x32F3DD0)
+#define F_ALLOC_CTX     SH_IMG(0xE410100)
+#define F_ALLOC         SH_IMG(0x674F1A0)
+#define G_POOL          SH_IMG(0x4D78D80)
+#define F_CONT_CTOR     SH_IMG(0x32F5310)
+#define F_ATTACH        SH_IMG(0x32F4230)
+#define F_DIRTY         SH_IMG(0x16BAFD60)
+#define F_LINST_CTOR    SH_IMG(0x336E440)
+#define F_LABEL_CREATE  SH_IMG(0x336EB60)
+#define F_LABEL_APPLY   SH_IMG(0x336EB20)
+#define F_LABEL_TEXT    SH_IMG(0x3336260)
+#define F_LABEL_SIZE    SH_IMG(0x3336310)
+#define F_LABEL_UPDATE  SH_IMG(0x16C30910)
+#define F_LABEL_REGIST  SH_IMG(0x3334E20)
+#define F_IINST_CTOR    SH_IMG(0x336DB60)
+#define F_IMAGE_CREATE  SH_IMG(0x336E010)
+#define F_IMAGE_APPLY   SH_IMG(0x336DFC0)
+#define F_WIDGET_COLOUR SH_IMG(0x32F3310)
 
-#define VT_LABEL        SH_IMG(0x3CF89D0)
-#define VT_CONTAINER    SH_IMG(0x3CF09C0)
-#define VT_CONT_PRIV    SH_IMG(0x3CF09F8)
-#define VT_IMAGE        SH_IMG(0x3CF1660)
-#define VT_LABEL_INST   SH_IMG(0x3D052C8)
-#define VT_IMAGE_INST   SH_IMG(0x3D04EA0)
+#define VT_LABEL        SH_IMG(0x3CF8930)
+#define VT_CONTAINER    SH_IMG(0x3CF0920)
+#define VT_CONT_PRIV    SH_IMG(0x3CF0958)
+#define VT_IMAGE        SH_IMG(0x3CF15C0)
+#define VT_LABEL_INST   SH_IMG(0x3D05228)
+#define VT_IMAGE_INST   SH_IMG(0x3D04E00)
 
 /* Widget private layout. */
 #define P_LOCAL      0x90
@@ -87,18 +87,18 @@ enum { OP_PANEL = 1, OP_LABEL, OP_IMAGE, OP_TEXT, OP_POS, OP_SIZE,
        OP_REPARENT };
 
 /* label size flags at +0x24c/+0x24d: 1 fixed, 0 by text */
-#define F_LABEL_FIXW  SH_IMG(0x33366A0)
-#define F_LABEL_FIXH  SH_IMG(0x3337140)
+#define F_LABEL_FIXW  SH_IMG(0x3335AD0)
+#define F_LABEL_FIXH  SH_IMG(0x3336570)
 
 /* Textures of our own: the engine's texture object, pixels
  * pushed via its direct map, drawn by name "ptr_<hex>". */
-#define F_TEX_CTOR    SH_IMG(0xDC4D920)
-#define F_TEX_CREATE  SH_IMG(0xDCC7280)
-#define F_TEX_MAP     SH_IMG(0xDC79B00)
-#define F_TEX_PUSH    SH_IMG(0x14FEEB0)
-#define F_IMG_UV0     SH_IMG(0x32FDDD0)
-#define F_IMG_UV1     SH_IMG(0x32FDF70)
-#define G_DEVICE      SH_IMG(0x4D5B058)
+#define F_TEX_CTOR    SH_IMG(0xDF5C480)
+#define F_TEX_CREATE  SH_IMG(0xE04F670)
+#define F_TEX_MAP     SH_IMG(0xDF7FEB0)
+#define F_TEX_PUSH    SH_IMG(0x14FFE70)
+#define F_IMG_UV0     SH_IMG(0x32FD280)
+#define F_IMG_UV1     SH_IMG(0x32FD420)
+#define G_DEVICE      SH_IMG(0x4D5B0D8)
 #define MAX_TEX       64
 
 typedef struct {

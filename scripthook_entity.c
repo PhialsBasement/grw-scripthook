@@ -11,8 +11,8 @@
 #include "image.h"
 
 /* RVAs, so this survives a relocated image. */
-#define RVA_PLAYER_MGR   0x4BB6438
-#define RVA_VT_ENTITY    0x39C6FC8
+#define RVA_PLAYER_MGR   0x4BB64B8
+#define RVA_VT_ENTITY    0x39C6DF8
 
 #define OFF_MGR_WORLD    0x98
 #define OFF_WORLD_LIST   0xBA0
@@ -259,7 +259,7 @@ static int SetNodesHidden(uint64_t entity, int hidden, int *seen) {
 
 /* The head is a part group the camera owns for ADS. Its
  * controller is found by which render nodes it holds. */
-#define CTRL_VT     SH_IMG(0x3BCB3B8)
+#define CTRL_VT     SH_IMG(0x3BCB2A8)
 #define CTRL_NODES  0x40
 #define CTRL_COUNT  0x4A
 

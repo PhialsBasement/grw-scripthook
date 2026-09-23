@@ -9,8 +9,8 @@
 #include "scripthook.h"
 #include "image.h"
 
-#define IAT_ASYNCKEY   SH_IMG(0x1880FBB0)
-#define IAT_CURSORPOS  SH_IMG(0x1880FBC0)
+#define IAT_ASYNCKEY   SH_IMG(0x182B2B90)
+#define IAT_CURSORPOS  SH_IMG(0x182B2BA0)
 
 extern void ShSetError(int err);
 extern int ShReadableAddr(uint64_t addr, size_t len);

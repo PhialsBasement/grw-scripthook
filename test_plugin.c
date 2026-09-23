@@ -1994,7 +1994,7 @@ static void CmdCall(Resp *r, const char *line) {
 /* Ai::SpawningManagerUpdate, a per frame game thread
  * call, used as the trigger for queued work.
  */
-#define RVA_FRAME_TRIGGER 0xC17FE70
+#define RVA_FRAME_TRIGGER 0xBF42B60
 
 /* gcall <fn> [rcx] [rdx] [r8] [r9] */
 static void CmdGCall(Resp *r, const char *line) {
@@ -2479,7 +2479,7 @@ static volatile int g_gndDone = 0;
 static uint64_t g_gndThis = 0;
 /* Resolved lazily, since the base is only known at run. */
 static uint64_t g_gndFn = 0;
-#define GND_FN_RVA 0x1997270
+#define GND_FN_RVA 0x1997BF0
 static float    g_gndIn[4] __attribute__((aligned(16)));
 static float    g_gndOut = -1000.0f;
 static int      g_gndRet = -1;
@@ -2498,7 +2498,7 @@ static volatile int g_castDone = 0;
 static uint64_t g_castB = 0;
 static uint64_t g_castMask = 0x4000;
 static uint64_t g_castFn = 0;
-#define CAST_FN_RVA 0xFBE88D0
+#define CAST_FN_RVA 0xFBB3580
 static int      g_castRet = -1;
 static int      g_castCount = -1;
 static float    g_castHit[4];
@@ -2655,10 +2655,10 @@ RayCallback(uint64_t rcx, uint64_t rdx, uint64_t r8) {
         memcpy(&qobj, (void *)(rcx + 0x478), 8);
         if (!qobj || !CanRead((void *)qobj, 8)) return;
         memcpy(&qvt, (void *)qobj, 8);
-        if (qvt != SH_IMG(0x3D82AD0)) return;
+        if (qvt != SH_IMG(0x3D82AA0)) return;
         if (!CanRead((void *)r8, 8)) return;
         memcpy(&cvt, (void *)r8, 8);
-        if (cvt != SH_IMG(0x3ADB6F0)) return;
+        if (cvt != SH_IMG(0x3ADB640)) return;
     }
     g_rayUsedCtx = rcx;
     if (!CanRead((void *)rdx, 0x80) || !CanRead((void *)r8, 0x100))
@@ -2750,7 +2750,7 @@ static void CmdRayCast(Resp *r, const char *line) {
     float x = 0, y = 0, z = 0, dz = -900.0f;
     sscanf(line, "%*s %f %f %f %f %63s", &x, &y, &z, &dz, is);
     if (is[0]) g_rayImpl = ParseHex(is);
-    if (!g_rayImpl) g_rayImpl = SH_IMG(0x17E5E780);
+    if (!g_rayImpl) g_rayImpl = SH_IMG(0x177F4E00);
     if (!g_rayStub) { RAppend(r, "arm raysnap first\n"); return; }
 
     g_rayOrigin[0] = x; g_rayOrigin[1] = y;
@@ -3108,9 +3108,9 @@ static int EntIsEntity(uint64_t e);
 #define OFF_ENT_NCOMPS   0x82
 
 /* Entity creation, the recipe from FUN_14C90ACD0. */
-#define RVA_MAKE_ENTITY  0x93A8050
-#define RVA_SET_POS      0x17DEDE0
-#define RVA_ACTIVATE     0xC6C13F0
+#define RVA_MAKE_ENTITY  0x9B92440
+#define RVA_SET_POS      0x17DF5B0
+#define RVA_ACTIVATE     0xC46E730
 
 typedef uint64_t (__attribute__((ms_abi)) *MakeEntity_t)(void);
 typedef void (__attribute__((ms_abi)) *SetPos_t)(uint64_t,
@@ -3165,7 +3165,7 @@ static void CmdSpawn(Resp *r, const char *line) {
 /* The engine's generic instantiate, from a descriptor.
  * size at desc+0x28, ctor at desc+0x48.
  */
-#define RVA_CREATE_INST  0xE0E0C70
+#define RVA_CREATE_INST  0xE536F10
 
 typedef uint64_t (__attribute__((ms_abi)) *CreateInst_t)(uint64_t,
                                                          uint64_t);
@@ -4776,7 +4776,7 @@ typedef struct { uint64_t obj, node, parent; float pos[3]; } TNode;
 static void CmdTree(Resp *r, const char *line) {
     char vs[64] = {0}, ms[64] = {0};
     sscanf(line, "%*s %63s %63s", vs, ms);
-    uint64_t vt = vs[0] ? ParseHex(vs) : SH_IMG(0x39C6FC8);
+    uint64_t vt = vs[0] ? ParseHex(vs) : SH_IMG(0x39C6DF8);
     int maxn = ms[0] ? (int)strtol(ms, NULL, 10) : 4000;
     if (maxn > 20000) maxn = 20000;
 
@@ -4933,8 +4933,8 @@ done_f32:
 /* ---- entity registry ---- */
 
 /* RVAs, so these survive a relocated image. */
-#define RVA_PLAYER_MGR   0x4BB6438
-#define RVA_VT_ENTITY    0x39C6FC8
+#define RVA_PLAYER_MGR   0x4BB64B8
+#define RVA_VT_ENTITY    0x39C6DF8
 #define OFF_MGR_WORLD    0x98
 #define OFF_WORLD_LIST   0xBA0
 #define OFF_WORLD_COUNT  0xBA8
@@ -5378,7 +5378,7 @@ done_fp:
 
 /* ---- player symbol resolution ---- */
 
-#define PLAYER_TF_VTABLE SH_IMG(0x39EA9F8)
+#define PLAYER_TF_VTABLE SH_IMG(0x39EA8B8)
 #define PLAYER_POS_OFF   0x90
 
 static uint8_t *g_playerTf = NULL;
@@ -5486,7 +5486,7 @@ static int g_ovlW = 1920, g_ovlH = 1080;
 /* Camera basis rows and projection scales, tunable at
  * runtime so the mapping can be fixed without a rebuild.
  */
-#define RVA_CAM_GLOBAL   0x4BC3358
+#define RVA_CAM_GLOBAL   0x4BC33E0
 #define OFF_CAM_BASIS    0x90
 #define OFF_CAM_POS      0xC0
 #define OFF_CAM_PROJ     0xD0
